@@ -105,10 +105,10 @@ INITIAL STATE:
 *%
 
 % Syntax: state(TIME,STATE)
-% States: truck_state(TRUCK_ID,NODE_ID,BATTERY_LEVEL,PACKAGE_LOAD)
+% States: truck_at(TRUCK_ID,NODE_ID), truck_battery(TRUCK_ID,BATTERY_LEVEL), truck_packages(TRUCK_ID,PACKAGE_LOAD)
 %         delivery_state(NODE_ID,PACKAGES_LEFT)
 %         warehouse_state(NODE_ID,PACKAGES_LEFT)
-state(1,truck_state(t1,11,6,0) ; 1,truck_state(t2,12,7,0) ; 1,truck_state(t3,13,10,0) ;
+state(1,truck_at(t1,11 ; t2,12 ; t3,13) ; 1,truck_battery(t1,6 ; t2,7 ; t3,10) ; 1,truck_packages(t1,0 ; t2,0 ; t3,0) ;
       1,delivery_state(3,2) ; 1,delivery_state(6,2) ;
       1,warehouse_state(10,5)
      ).
@@ -121,23 +121,16 @@ Explanation (max 100 words):
 [WRITE YOUR EXPLANATION HERE]
 *%
 
-% Enumerate all valid truck states
-valid_truck_state(TID,NID,0..BC,0..PC) :- truck(TID,BC,PC), node(NID).
-
 % Consider all possible truck states as fluent
-fluent(truck_state(TID,NID,BL,PL)) :- valid_truck_state(TID,NID,BL,PL).
-
-% Enumerate all valid delivery states
-valid_delivery_state(NID,0..MPL) :- state(1,delivery_state(NID,MPL)).
+fluent(truck_at(TID,NID)) :- truck(TID,_,_), node(NID).
+fluent(truck_battery(TID,0..BC)) :- truck(TID,BC,_).
+fluent(truck_packages(TID,0..PC)) :- truck(TID,_,PC).
 
 % Consider all possible delivery states as fluent
-fluent(delivery_state(NID,PL)) :- valid_delivery_state(NID,PL).
-
-% Enumerate all valid warehouse states
-valid_warehouse_state(NID,0..MPL) :- state(1,warehouse_state(NID,MPL)).
+fluent(delivery_state(NID,0..MPL)) :- state(1,delivery_state(NID,MPL)).
 
 % Consider all possible warehouse states as fluent
-fluent(warehouse_state(NID,PL)) :- valid_warehouse_state(NID,PL).
+fluent(warehouse_state(NID,0..MPL)) :- state(1,warehouse_state(NID,MPL)).
 
 % Enforce the frame axiom:
 % 1. Fluent states stay true unless explicitly made false
@@ -148,54 +141,59 @@ state(T,S) :- time(T), fluent(S), make_true(T,S).
 % Wait - no need to handle this manually, the frame axiom does for us
 
 % Move to a node; battery level goes down by one
-make_true(T+1,truck_state(TID,NIDN,BL-1,PL)) :- time(T+1),
-                                                do(T,TID,move(NIDN)),
-                                                state(T,truck_state(TID,NID,BL,PL)).
-make_false(T+1,truck_state(TID,NID,BL,PL))   :- time(T+1),
-                                                do(T,TID,move(NIDN)),
-                                                state(T,truck_state(TID,NID,BL,PL)).
+make_true(T+1,truck_at(TID,NIDN))     :- time(T+1),
+                                          do(T,TID,move(NIDN)).
+make_false(T+1,truck_at(TID,NID))      :- time(T+1),
+                                          do(T,TID,move(_)),
+                                          state(T,truck_at(TID,NID)).
+make_true(T+1,truck_battery(TID,BL-1)) :- time(T+1),
+                                          do(T,TID,move(_)),
+                                          state(T,truck_battery(TID,BL)).
+make_false(T+1,truck_battery(TID,BL)) :-  time(T+1),
+                                          do(T,TID,move(_)),
+                                          state(T,truck_battery(TID,BL)).
 
 % Load a package; package load goes up by one for the truck
 %                 packages left goes down by one for the warehouse
-make_true(T+1,truck_state(TID,NID,BL,PL+1)) :- time(T+1),
-                                               do(T,TID,load),
-                                               state(T,truck_state(TID,NID,BL,PL)).
-make_false(T+1,truck_state(TID,NID,BL,PL))  :- time(T+1),
-                                               do(T,TID,load),
-                                               state(T,truck_state(TID,NID,BL,PL)).
-make_true(T+1,warehouse_state(NID,PL-1))    :- time(T+1),
-                                               do(T,TID,load),
-                                               state(T,truck_state(TID,NID,_,_)),
-                                               state(T,warehouse_state(NID,PL)).
-make_false(T+1,warehouse_state(NID,PL))     :- time(T+1),
-                                               do(T,TID,load),
-                                               state(T,truck_state(TID,NID,_,_)),
-                                               state(T,warehouse_state(NID,PL)).
+make_true(T+1,truck_packages(TID,PL+1))  :- time(T+1),
+                                            do(T,TID,load),
+                                            state(T,truck_packages(TID,PL)).
+make_false(T+1,truck_packages(TID,PL))   :- time(T+1),
+                                            do(T,TID,load),
+                                            state(T,truck_packages(TID,PL)).
+make_true(T+1,warehouse_state(NID,PL-1)) :- time(T+1),
+                                            do(T,TID,load),
+                                            state(T,truck_at(TID,NID)),
+                                            state(T,warehouse_state(NID,PL)).
+make_false(T+1,warehouse_state(NID,PL))  :- time(T+1),
+                                            do(T,TID,load),
+                                            state(T,truck_at(TID,NID)),
+                                            state(T,warehouse_state(NID,PL)).
 
 % Unload a package; package load goes down by one for the truck
 %                   packages left goes down by one for the delivery point
-make_true(T+1,truck_state(TID,NID,BL,PL-1)) :- time(T+1),
-                                               do(T,TID,unload),
-                                               state(T,truck_state(TID,NID,BL,PL)).
-make_false(T+1,truck_state(TID,NID,BL,PL))  :- time(T+1),
-                                               do(T,TID,unload),
-                                               state(T,truck_state(TID,NID,BL,PL)).
-make_true(T+1,delivery_state(NID,PL-1))     :- time(T+1),
-                                               do(T,TID,unload),
-                                               state(T,truck_state(TID,NID,_,_)),
-                                               state(T,delivery_state(NID,PL)).
-make_false(T+1,delivery_state(NID,PL))      :- time(T+1),
-                                               do(T,TID,unload),
-                                               state(T,truck_state(TID,NID,_,_)),
-                                               state(T,delivery_state(NID,PL)).
+make_true(T+1,truck_packages(TID,PL-1)) :- time(T+1),
+                                           do(T,TID,unload),
+                                           state(T,truck_packages(TID,PL)).
+make_false(T+1,truck_packages(TID,PL))  :- time(T+1),
+                                           do(T,TID,unload),
+                                           state(T,truck_packages(TID,PL)).
+make_true(T+1,delivery_state(NID,PL-1)) :- time(T+1),
+                                           do(T,TID,unload),
+                                           state(T,truck_at(TID,NID)),
+                                           state(T,delivery_state(NID,PL)).
+make_false(T+1,delivery_state(NID,PL))  :- time(T+1),
+                                           do(T,TID,unload),
+                                           state(T,truck_at(TID,NID)),
+                                           state(T,delivery_state(NID,PL)).
 
 % Charge; battery level goes up by one
-make_true(T+1,truck_state(TID,NID,BL+1,PL)) :- time(T+1),
-                                               do(T,TID,charge),
-                                               state(T,truck_state(TID,NID,BL,PL)).
-make_false(T+1,truck_state(TID,NID,BL,PL))  :- time(T+1),
-                                               do(T,TID,charge),
-                                               state(T,truck_state(TID,NID,BL,PL)).
+make_true(T+1,truck_battery(TID,BL+1)) :- time(T+1),
+                                          do(T,TID,charge),
+                                          state(T,truck_battery(TID,BL)).
+make_false(T+1,truck_battery(TID,BL))  :- time(T+1),
+                                          do(T,TID,charge),
+                                          state(T,truck_battery(TID,BL)).
 
 %*
 RESTRICTIONS ON THE ACTIONS:
@@ -207,87 +205,83 @@ Explanation (max 100 words):
 
 % Cannot move to non-adjacent node
 :- do(T,TID,move(NIDN)),
-   state(T,truck_state(TID,NID,_,_)),
+   state(T,truck_at(TID,NID)),
    not edge(NID,NIDN).
 
 % Cannot load when not at a warehouse
 :- do(T,TID,load),
-   state(T,truck_state(TID,NID,_,_)),
+   state(T,truck_at(TID,NID)),
    not warehouse(NID).
 
 % Cannot load from an empty warehouse
 :- do(T,TID,load),
-   state(T,truck_state(TID,NID,_,_)),
+   state(T,truck_at(TID,NID)),
    state(T,warehouse_state(NID,0)).
 
 % Cannot load on full capacity
 :- do(T,TID,load),
    truck(TID,_,PC),
-   state(T,truck_state(TID,NID,_,PC)).
+   state(T,truck_packages(TID,PC)).
 
 % Cannot unload when not at a delivery point
 :- do(T,TID,unload),
-   state(T,truck_state(TID,NID,_,_)),
+   state(T,truck_at(TID,NID)),
    not delivery_point(NID).
 
 % Cannot unload to a full delivery point
 :- do(T,TID,unload),
-   state(T,truck_state(TID,NID,_,_)),
+   state(T,truck_at(TID,NID)),
    state(T,delivery_state(NID,0)).
 
 % Cannot unload when not carrying a package
 :- do(T,TID,unload),
-   state(T,truck_state(TID,_,_,0)).
+   state(T,truck_packages(TID,0)).
 
 % Cannot charge when not at a charging station
 :- do(T,TID,charge),
-   state(T,truck_state(TID,NID,_,_)),
+   state(T,truck_at(TID,NID)),
    not charging_station(NID).
 
 % Cannot charge on full battery
 :- do(T,TID,charge),
    truck(TID,BC,_),
-   state(T,truck_state(TID,NID,BC,_)).
+   state(T,truck_battery(TID,BC)).
 
 % Cannot move on empty battery
 :- do(T,TID,move(_)),
-   state(T,truck_state(TID,_,0,_)).
+   state(T,truck_battery(TID,0)).
 
 % Cannot have two trucks at the same position
-:- state(T,truck_state(TID1,NID,_,_)),
-   state(T,truck_state(TID2,NID,_,_)),
+:- state(T,truck_at(TID1,NID)),
+   state(T,truck_at(TID2,NID)),
    TID1 != TID2.
 
 % Cannot swap the positions of two trucks
 :- do(T,TID1,move(NID2)),
    do(T,TID2,move(NID1)),
-   state(T,truck_state(TID1,NID1,_,_)),
-   state(T,truck_state(TID2,NID2,_,_)),
+   state(T,truck_at(TID1,NID1)),
+   state(T,truck_at(TID2,NID2)),
    TID1 != TID2.
 
 % Symmetry breaking; do not move back and forth
 :- do(T,TID,move(_)),
    do(T+1,TID,move(NID1)),
-   state(T,truck_state(TID,NID1,_,_)).
+   state(T,truck_at(TID,NID1)).
 
 % Do not run low on battery when not close to a charging station
-:- state(T,truck_state(TID,NID,BL,_)),
+:- state(T,truck_at(TID,NID)),
+   state(T,truck_battery(TID,BL)),
    dist_charging(NID,DC),
    BL < DC.
 
 % Do not leave a delivery point if there are more packages to unload
 :- do(T,TID,A),
-   state(T,truck_state(TID,NID,_,TPL)),
+   state(T,truck_at(TID,NID)),
+   state(T,truck_packages(TID,TPL)),
    state(T,delivery_state(NID,DPL)),
    TPL > 0,
    DPL > 0,
    A != unload.
-
-% Do not carry more than needed in total
-:- do(T,_,load),
-   TC = #sum { TPL,TID : state(T,truck_state(TID,_,_,TPL)) },
-   TN = #sum { DPL,NID : state(T,delivery_state(NID,DPL)) },
-   TC == TN.
 
 %*
 GOAL CONDITIONS:
@@ -299,9 +293,12 @@ Explanation (max 100 words):
 
 % Auxiliary predicates expressing that a goal condition has been met
 deliveries_performed(T,NID) :- state(T,delivery_state(NID,0)).
-truck_parked(T,TID) :- state(T,truck_state(TID,NID,_,_)), parking(NID).
-truck_empty(T,TID) :- state(T,truck_state(TID,_,_,0)).
-reach_charging(T,TID) :- state(T,truck_state(TID,NID,BL,_)), dist_charging(NID,D), D <= BL.
+truck_parked(T,TID) :- state(T,truck_at(TID,NID)), parking(NID).
+truck_empty(T,TID) :- state(T,truck_packages(TID,0)).
+reach_charging(T,TID) :- state(T,truck_at(TID,NID)),
+                         state(T,truck_battery(TID,BL)),
+                         dist_charging(NID,D),
+                         D <= BL.
 
 % Define when the goal is reached
 goal(T) :- time(T),
@@ -364,10 +361,13 @@ PRETTY PRINTING
 from collections import defaultdict
 import clingo
 
+def nesteddict():
+   return defaultdict(nesteddict)
+
 def on_model(model):
     goal = None
     actions = defaultdict(dict)
-    truck_states = defaultdict(dict)
+    truck_states = nesteddict()
     delivery_states = defaultdict(dict)
     warehouse_states = defaultdict(dict)
 
@@ -388,16 +388,18 @@ def on_model(model):
         elif atom.name == "state":
             time = atom.arguments[0].number
             state = atom.arguments[1]
-            if state.name == "truck_state":
+            if state.name == "truck_at":
                 truck_id = str(state.arguments[0])
                 node_id = state.arguments[1].number
-                battery_level = state.arguments[2].number
-                package_load = state.arguments[3].number
-                truck_states[truck_id][time] = {
-                    "node": node_id,
-                    "battery": battery_level,
-                    "load": package_load
-                }
+                truck_states[truck_id][time]["node"] = node_id
+            elif state.name == "truck_battery":
+                truck_id = str(state.arguments[0])
+                battery = state.arguments[1].number
+                truck_states[truck_id][time]["battery"] = battery
+            elif state.name == "truck_packages":
+                truck_id = str(state.arguments[0])
+                packages = state.arguments[1].number
+                truck_states[truck_id][time]["packages"] = packages
             elif state.name == "delivery_state":
                 node_id = state.arguments[0].number
                 packages = state.arguments[1].number
@@ -420,8 +422,8 @@ def on_model(model):
     for truck_id, truck_state in truck_states.items():
         node = truck_state[max_time]["node"]
         battery = truck_state[max_time]["battery"]
-        load = truck_state[max_time]["load"]
-        print(f"- Truck {truck_id} @{node} P {load} B {battery}")
+        packages = truck_state[max_time]["packages"]
+        print(f"- Truck {truck_id} @{node} P {packages} B {battery}")
     for node_id, delivery_state in delivery_states.items():
         packages = delivery_state[max_time]
         print(f"- Delivery @{node_id}, packages left: {packages}")
