@@ -253,15 +253,10 @@ Explanation (max 100 words):
 :- do(T,TID,move(_)),
    state(T,truck_state(TID,_,0,_)).
 
-% Cannot move two trucks to the same position
-:- do(T,TID1,move(NID)),
-   do(T,TID2,move(NID)),
+% Cannot have two trucks at the same position
+:- state(T,truck_state(TID1,NID,_,_)),
+   state(T,truck_state(TID2,NID,_,_)),
    TID1 != TID2.
-
-% Cannot move a truck to a position where another truck will wait
-:- do(T,TID1,move(NID)),
-   do(T,TID2,wait),
-   state(T,truck_state(TID2,NID,_,_)).
 
 % Cannot swap the positions of two trucks
 :- do(T,TID1,move(NID2)),
