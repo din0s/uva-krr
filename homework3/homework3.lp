@@ -266,9 +266,28 @@ Explanation (max 100 words):
    TID1 != TID2.
 
 % Symmetry breaking; do not move back and forth
-% :- do(T,TID,move(_)),
-%    do(T+1,TID,move(NID1)),
-%    state(T,truck_state(TID,NID1,_,_)).
+:- do(T,TID,move(_)),
+   do(T+1,TID,move(NID1)),
+   state(T,truck_state(TID,NID1,_,_)).
+
+% Do not run low on battery when not close to a charging station
+:- state(T,truck_state(TID,NID,BL,_)),
+   dist_charging(NID,DC),
+   BL < DC.
+
+% Do not leave a delivery point if there are more packages to unload
+:- do(T,TID,A),
+   state(T,truck_state(TID,NID,_,TPL)),
+   state(T,delivery_state(NID,DPL)),
+   TPL > 0,
+   DPL > 0,
+   A != unload.
+
+% Do not carry more than needed in total
+:- do(T,_,load),
+   TC = #sum { TPL,TID : state(T,truck_state(TID,_,_,TPL)) },
+   TN = #sum { DPL,NID : state(T,delivery_state(NID,DPL)) },
+   TC == TN.
 
 %*
 GOAL CONDITIONS:
