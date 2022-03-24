@@ -200,9 +200,9 @@ Explanation (max 100 words):
 The program explores all actions at any given time step, but this can violate
 the conditions required to actually perform some of these actions. To this end,
 we introduce 12 constraints, which ensure the validity of the explored actions.
-Additionally, we add 3 constraints to efficiently limit the search space by
-foreseeing and discarding actions that lead to dead-end states (after which the 
-problem cannot be solved).
+Additionally, we add an optimization constraint to efficiently limit the search 
+space by foreseeing and discarding actions that lead to dead-end states (after 
+which the problem cannot be solved).
 *%
 
 % 1. Cannot move to non-adjacent node
@@ -265,25 +265,11 @@ problem cannot be solved).
    state(T,truck_at(TID2,NID2)),
    TID1 != TID2.
 
-% Optimization 1: do not move back and forth
-:- do(T,TID,move(_)),
-   do(T+1,TID,move(NID1)),
-   state(T,truck_at(TID,NID1)).
-
-% Optimization 2: do not run low on battery when not close to a charging station
+% Optimization: do not run low on battery when not close to a charging station
 :- state(T,truck_at(TID,NID)),
    state(T,truck_battery(TID,BL)),
    dist_charging(NID,DC),
    BL < DC.
-
-% Optimization 3: do not leave a delivery point if there are more packages to unload
-:- do(T,TID,A),
-   state(T,truck_at(TID,NID)),
-   state(T,truck_packages(TID,TPL)),
-   state(T,delivery_state(NID,DPL)),
-   TPL > 0,
-   DPL > 0,
-   A != unload.
 
 %*
 GOAL CONDITIONS:
